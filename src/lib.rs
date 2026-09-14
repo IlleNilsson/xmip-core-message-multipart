@@ -17,29 +17,12 @@
 
 mod body;
 
-use message::{Shape, ShapeError, Shaped, media_type_of};
+use message::{Shape, ShapeError, Shaped, media_type_of, parameter};
 use stream::Stream;
 
 /// The multipart shape.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Multipart;
-
-/// The `name` parameter of a media type or header value, unquoted.
-pub(crate) fn parameter<'a>(value: &'a str, name: &str) -> Option<&'a str> {
-    value.split(';').skip(1).find_map(|parameter| {
-        let (key, value) = parameter.split_once('=')?;
-        if !key.trim().eq_ignore_ascii_case(name) {
-            return None;
-        }
-        let value = value.trim();
-        Some(
-            value
-                .strip_prefix('"')
-                .and_then(|v| v.strip_suffix('"'))
-                .unwrap_or(value),
-        )
-    })
-}
 
 impl Shape for Multipart {
     fn technology(&self) -> &'static str {
@@ -70,7 +53,7 @@ impl Shape for Multipart {
                 .to_vec(),
         };
         let parts = body::parts(stream.bytes(), &boundary)
-            .map_err(|(reason, at)| ShapeError::new("multipart", reason).at(at))?;
+            .map_err(|stop| ShapeError::refused("multipart", stop))?;
         let message_type = stream
             .media_type()
             .filter(|_| media_type_of(stream).as_deref() == Some("multipart/related"))
@@ -171,8 +154,6 @@ Content-Disposition: form-data; name=\"note\"\r\n\r\nx\r\n--b1--\r\nepilogue";
         assert!(!Multipart.recognises(b"-- not a boundary"));
         assert!(!Multipart.recognises(b"--\r\n"));
         assert!(!Multipart.recognises(b"{}"));
-        assert_eq!(parameter("a/b; x=\"1\"; Y=2", "y"), Some("2"));
-        assert_eq!(parameter("a/b", "x"), None);
     }
 
     #[test]

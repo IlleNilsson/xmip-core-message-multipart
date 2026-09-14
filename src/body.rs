@@ -1,10 +1,7 @@
 //! The body: delimiters found, parts cut between them, each part's headers
 //! read for its name and media type.
 
-use message::Part;
-
-/// Where the cut stopped and why.
-pub type Stop = (&'static str, usize);
+use message::{Part, Stop, parameter};
 
 /// The boundary a body declares by opening with `--boundary` on its first
 /// line, when no media type declared one.
@@ -88,7 +85,7 @@ fn part(section: &[u8], offset: usize) -> Result<Part, Stop> {
         .unwrap_or(body);
     let headers = String::from_utf8_lossy(headers);
     let name = header(&headers, "content-disposition")
-        .and_then(|disposition| crate::parameter(disposition, "name").map(str::to_string))
+        .and_then(|disposition| parameter(disposition, "name").map(str::to_string))
         .or_else(|| header(&headers, "content-id").map(content_id));
     let media_type = header(&headers, "content-type").map(str::to_string);
     Ok(Part::new(name, body, media_type))
