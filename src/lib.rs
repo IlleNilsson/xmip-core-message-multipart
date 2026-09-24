@@ -9,15 +9,18 @@
 //! parameter of `multipart/related` when there is one: what an AS2 or a
 //! SOAP-with-attachments body says its root part is (ADR-0047).
 //!
-//! The delimiters are RFC 2046's — `--boundary` on a line of its own, the
-//! last one followed by `--` — and a part's bytes are exactly what lies
-//! between its blank line and the next delimiter, less the line break that
-//! belongs to the delimiter. The preamble and the epilogue are dropped. The
-//! headers are read for the three names above and nothing else.
+//! The body is cut by `codec::mime`, the one multipart reader the estate
+//! has, which the transports that carry MIME read with too: the delimiters
+//! are RFC 2046's — `--boundary` on a line of its own, the last one
+//! followed by `--` — and a part's bytes are exactly what lies between its
+//! blank line and the next delimiter, less the line break that belongs to
+//! the delimiter. The preamble and the epilogue are dropped. The shape
+//! reads the headers for the three names above and nothing else.
 
 mod body;
 
-use message::{Shape, ShapeError, Shaped, media_type_of, parameter};
+use codec::mime::{self, parameter};
+use message::{Shape, ShapeError, Shaped, media_type_of};
 use stream::Stream;
 
 /// The multipart shape.
@@ -41,18 +44,17 @@ impl Shape for Multipart {
     }
 
     fn recognises(&self, bytes: &[u8]) -> bool {
-        body::opening_boundary(bytes).is_some()
+        mime::opening_boundary(bytes).is_some()
     }
 
     fn shape(&self, stream: &Stream) -> Result<Shaped, ShapeError> {
         let declared = stream.media_type().and_then(|m| parameter(m, "boundary"));
         let boundary = match declared {
-            Some(boundary) => boundary.as_bytes().to_vec(),
-            None => body::opening_boundary(stream.bytes())
-                .ok_or_else(|| ShapeError::new("multipart", "no boundary").at(0))?
-                .to_vec(),
+            Some(boundary) => boundary,
+            None => mime::opening_boundary(stream.bytes())
+                .ok_or_else(|| ShapeError::new("multipart", "no boundary").at(0))?,
         };
-        let parts = body::parts(stream.bytes(), &boundary)
+        let parts = body::parts(stream.bytes(), boundary)
             .map_err(|stop| ShapeError::refused("multipart", stop))?;
         let message_type = stream
             .media_type()
