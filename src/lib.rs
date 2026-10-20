@@ -43,7 +43,7 @@ impl Shape for Multipart {
         ]
     }
 
-    fn recognises(&self, bytes: &[u8]) -> bool {
+    fn recognizes(&self, bytes: &[u8]) -> bool {
         mime::opening_boundary(bytes).is_some()
     }
 
@@ -147,15 +147,15 @@ Content-Disposition: form-data; name=\"note\"\r\n\r\nx\r\n--b1--\r\nepilogue";
     }
 
     #[test]
-    fn the_shape_claims_the_multipart_types_and_recognises_a_leading_boundary() {
+    fn the_shape_claims_the_multipart_types_and_recognizes_a_leading_boundary() {
         assert_eq!(Multipart.technology(), "multipart");
         assert!(Multipart.media_types().contains(&"multipart/form-data"));
         assert!(Multipart.media_types().contains(&"multipart/related"));
-        assert!(Multipart.recognises(b"--abc\r\n\r\nx\r\n--abc--"));
-        assert!(Multipart.recognises(b"--abc\n\nx\n--abc--"));
-        assert!(!Multipart.recognises(b"-- not a boundary"));
-        assert!(!Multipart.recognises(b"--\r\n"));
-        assert!(!Multipart.recognises(b"{}"));
+        assert!(Multipart.recognizes(b"--abc\r\n\r\nx\r\n--abc--"));
+        assert!(Multipart.recognizes(b"--abc\n\nx\n--abc--"));
+        assert!(!Multipart.recognizes(b"-- not a boundary"));
+        assert!(!Multipart.recognizes(b"--\r\n"));
+        assert!(!Multipart.recognizes(b"{}"));
     }
 
     #[test]
@@ -164,7 +164,7 @@ Content-Disposition: form-data; name=\"note\"\r\n\r\nx\r\n--b1--\r\nepilogue";
         let by_media = message::choose(&shapes, &stream(b"x", Some("multipart/mixed; boundary=q")));
         assert_eq!(by_media.map(Shape::technology), Some("multipart"));
         let bare = stream(b"--q\n\none\n--q\nContent-ID: two\n\n2\n--q--\n", None);
-        let by_look = message::choose(&shapes, &bare).expect("recognised");
+        let by_look = message::choose(&shapes, &bare).expect("recognized");
         let sectioned = by_look.shape(&bare).expect("well-formed");
         assert_eq!(sectioned.parts.len(), 2);
         assert_eq!(sectioned.parts[0].name, None);
