@@ -48,14 +48,15 @@ impl Shape for Multipart {
     }
 
     fn shape(&self, stream: &Stream) -> Result<Shaped, ShapeError> {
+        let bytes = message::loaded(self.technology(), stream)?;
         let declared = stream.media_type().and_then(|m| parameter(m, "boundary"));
         let boundary = match declared {
             Some(boundary) => boundary,
-            None => mime::opening_boundary(stream.bytes())
+            None => mime::opening_boundary(bytes)
                 .ok_or_else(|| ShapeError::new("multipart", "no boundary").at(0))?,
         };
-        let parts = body::parts(stream.bytes(), boundary)
-            .map_err(|stop| ShapeError::refused("multipart", stop))?;
+        let parts =
+            body::parts(bytes, boundary).map_err(|stop| ShapeError::refused("multipart", stop))?;
         let message_type = stream
             .media_type()
             .filter(|_| media_type_of(stream).as_deref() == Some("multipart/related"))
@@ -161,15 +162,22 @@ Content-Disposition: form-data; name=\"note\"\r\n\r\nx\r\n--b1--\r\nepilogue";
     #[test]
     fn choose_picks_multipart_by_media_type_and_by_look_and_shapes_without_a_media_type() {
         let shapes: [&dyn Shape; 1] = [&Multipart];
-        let by_media = message::choose(&shapes, &stream(b"x", Some("multipart/mixed; boundary=q")));
+        let by_media = message::choose(&shapes, &stream(b"x", Some("multipart/mixed; boundary=q")))
+            .expect("held");
         assert_eq!(by_media.map(Shape::technology), Some("multipart"));
         let bare = stream(b"--q\n\none\n--q\nContent-ID: two\n\n2\n--q--\n", None);
-        let by_look = message::choose(&shapes, &bare).expect("recognized");
+        let by_look = message::choose(&shapes, &bare)
+            .expect("held")
+            .expect("recognized");
         let sectioned = by_look.shape(&bare).expect("well-formed");
         assert_eq!(sectioned.parts.len(), 2);
         assert_eq!(sectioned.parts[0].name, None);
         assert_eq!(sectioned.parts[0].bytes, b"one");
         assert_eq!(sectioned.parts[1].name.as_deref(), Some("two"));
-        assert!(message::choose(&shapes, &stream(b"plain", None)).is_none());
+        assert!(
+            message::choose(&shapes, &stream(b"plain", None))
+                .expect("held")
+                .is_none()
+        );
     }
 }
